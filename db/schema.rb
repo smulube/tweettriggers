@@ -10,15 +10,15 @@
 #
 # It's strongly recommended to check this file into your version control system.
 
-ActiveRecord::Schema.define(:version => 3) do
+ActiveRecord::Schema.define(:version => 4) do
 
   create_table "triggers", :force => true do |t|
-    t.string  "hash",    :limit => 40, :null => false
-    t.integer "user_id",               :null => false
+    t.string  "trigger_hash", :limit => 40, :null => false
+    t.integer "user_id",                    :null => false
     t.string  "tweet"
   end
 
-  add_index "triggers", ["hash"], :name => "index_triggers_on_hash", :unique => true
+  add_index "triggers", ["trigger_hash"], :name => "index_triggers_on_hash", :unique => true
   add_index "triggers", ["user_id"], :name => "index_triggers_on_user_id"
 
   create_table "users", :force => true do |t|
