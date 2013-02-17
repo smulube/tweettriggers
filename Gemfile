@@ -6,18 +6,12 @@ gem 'activerecord'
 gem 'activesupport'
 gem 'sinatra-activerecord'
 gem 'pg'
-gem 'rack-flash'
 gem 'twitter'
 gem 'twitter_oauth'
-#gem 'rack-fiber_pool'
-#gem 'em-synchrony'
-#gem 'em-resolv-replace'
-#gem 'thin'
 gem 'unicorn'
 gem 'redis'
 
 group :development, :test do
-  # gem 'heroku'
   gem 'rspec'
   gem 'rack-test'
   gem 'debugger', :platforms => :ruby_19
