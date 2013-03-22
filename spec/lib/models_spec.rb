@@ -25,6 +25,8 @@ describe Trigger do
     @trigger = @user.triggers.create!(
       :tweet => '{value}, {time}, {datastream}, {feed}, {feed_url}'
     )
+    $redis = double("redis")
+    $redis.stub!(:incr)
   end
 
   it "should belong to a user" do
@@ -35,31 +37,30 @@ describe Trigger do
   it "should not find the trigger if searched for by another user" do
     user2 = User.create!(:twitter_name => 'FakeRick')
     trigger2 = user2.triggers.create!(
-      :tweet => '{value}, {time}, {datastream}, {feed}, {feed_url}'
+      :tweet => '{value}, {datastream}, {feed}, {feed_url}'
     )
-    @user.triggers.find_by_hash(trigger2.hash).should be_nil
+    @user.triggers.find_by_trigger_hash(trigger2.trigger_hash).should be_nil
   end
 
   context "validation" do
     it "should generate the hash before validation" do
-      @trigger.hash = nil
+      @trigger.trigger_hash = nil
       @trigger.valid?
-      @trigger.hash.should match(/\w+/)
+      @trigger.trigger_hash.should match(/\w+/)
     end
 
     it "should not overwrite existing hash" do
-      hash = @trigger.hash
-      @trigger.hash.should_not be_nil
+      hash = @trigger.trigger_hash
+      @trigger.trigger_hash.should_not be_nil
       @trigger.valid?
-      @trigger.hash.should == hash
+      @trigger.trigger_hash.should == hash
     end
   end
 
   context "#send_tweet" do
-    it "should render the tweet and send it to Twitter" do
-      now_time = Time.now
-      Twitter.should_receive(:update).with("09120, #{now_time.strftime('%Y-%m-%d %T')}, myStreamId1, 504, https://cosm.com/feeds/504")
-      @trigger.send_tweet({
+    before(:each) do
+      @now_time = Time.now
+      @message = {
         'environment' => {
           'id' => 504
         },
@@ -69,38 +70,56 @@ describe Trigger do
             'current_value' => '09120'
           }
         },
-        'timestamp' => now_time.iso8601(6)
-      }.to_json)
+        'timestamp' => @now_time.iso8601(6)
+      }.to_json
+
+      Twitter.stub(:update)
+    end
+
+    it "should render the tweet and send it to Twitter" do
+      Twitter.should_receive(:update).with("09120, myStreamId1, 504, https://cosm.com/feeds/504 at #{@now_time.strftime('%Y-%m-%d %T')}")
+      @trigger.send_tweet(@message)
+    end
+
+    it "should truncate long messages so that the timestamp can always be appended" do
+      @trigger.tweet = "This is a really long and rambling message that does not contain a date. This is a really long and rambling message that does not contain any urls just waffle"
+      Twitter.should_receive(:update).with(@trigger.tweet[0, 140])
+      @trigger.send_tweet(@message)
+    end
+
+    it "should handle tweets containing urls
+
+    it "should increment our redis counter" do
+      $redis.should_receive(:incr).with(TOTAL_JOBS)
+      @trigger.send_tweet(@message)
     end
 
     it "should not send a tweet if the tweet text is nil" do
-      now_time = Time.now
       Twitter.should_not_receive(:update)
       @trigger.tweet = nil
       @trigger.send_tweet('{}')
     end
 
     context "exceptions" do
+      before(:each) do
+        Twitter.stub(:update).and_raise(TriggerException)
+      end
+
       it "should throw an exception if Twitter.update raises an error" do
-        now_time = Time.now
-        Twitter.should_receive(:update).with("09120, #{now_time.strftime('%Y-%m-%d %T')}, myStreamId1, 504, https://cosm.com/feeds/504").and_raise(TriggerException)
+        Twitter.should_receive(:update).with("09120, myStreamId1, 504, https://cosm.com/feeds/504 at #{@now_time.strftime('%Y-%m-%d %T')}").and_raise(TriggerException)
         expect {
-          @trigger.send_tweet({
-            'environment' => {
-              'id' => 504
-            },
-            'triggering_datastream' => {
-              'id' => 'myStreamId1',
-              'value' => {
-                'current_value' => '09120'
-              }
-            },
-            'timestamp' => now_time.iso8601(6)
-          }.to_json)
+          @trigger.send_tweet(@message)
         }.to raise_error(TriggerException)
       end
 
-      it "should not raise an exception if passed invalid JSON" do
+      it "should increment our error counter" do
+        $redis.should_receive(:incr).with(TOTAL_ERRORS)
+        expect {
+          @trigger.send_tweet(@message)
+        }.to raise_error(TriggerException)
+      end
+
+      it "should raise an exception if passed invalid JSON" do
         expect {
           @trigger.send_tweet("this is not json")
         }.to raise_error(TriggerException)

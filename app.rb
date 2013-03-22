@@ -3,7 +3,6 @@ require "rubygems"
 require "bundler/setup"
 require 'sinatra'
 require 'active_record'
-require 'rack-flash'
 require 'yaml'
 require 'uri'
 require 'twitter'
@@ -93,7 +92,6 @@ configure do
 
   ENV['LOG_LEVEL'] ||= 'INFO'
 
-  use Rack::Flash
   use Rack::Logger, log_level(ENV['LOG_LEVEL'])
   setup_db
   setup_redis
@@ -161,7 +159,7 @@ post '/triggers' do
   else
     @trigger = @user.triggers.create(:tweet => (params['tweet'] || '').strip)
     content_type :json
-    {'trigger_hash' => @trigger.hash}.to_json
+    {'trigger_hash' => @trigger.trigger_hash}.to_json
   end
 end
 
@@ -171,7 +169,7 @@ get '/triggers/:trigger_hash/edit' do
     erb :auth
   else
     session[:trigger_hash] = params[:trigger_hash]
-    @trigger = @user.triggers.find_by_hash(params[:trigger_hash])
+    @trigger = @user.triggers.find_by_trigger_hash(params[:trigger_hash])
     if @trigger.nil?
       session.clear
       # hang onto the trigger hash, so we can edit it after performing authentication with twitter
@@ -188,7 +186,7 @@ put '/triggers/:trigger_hash' do
   if @user.nil?
     erb :auth
   else
-    @trigger = @user.triggers.find_by_hash(params[:trigger_hash])
+    @trigger = @user.triggers.find_by_trigger_hash(params[:trigger_hash])
     if @trigger.nil?
       session.clear
       # hang onto the trigger hash, so we can edit it after performing authentication with twitter
@@ -198,14 +196,14 @@ put '/triggers/:trigger_hash' do
       @trigger.tweet = params['tweet'].strip
       @trigger.save!
       content_type :json
-      {'trigger_hash' => @trigger.hash}.to_json
+      {'trigger_hash' => @trigger.trigger_hash}.to_json
     end
   end
 end
 
 # Delete trigger
 delete '/triggers/:trigger_hash' do
-  @trigger = Trigger.find_by_hash(params[:trigger_hash])
+  @trigger = Trigger.find_by_trigger_hash(params[:trigger_hash])
   if @trigger.nil?
     session.clear
     # hang onto the trigger hash, so we can edit it after performing authentication with twitter
@@ -219,7 +217,7 @@ end
 
 # Send trigger
 post '/triggers/:trigger_hash/send' do
-  @trigger = Trigger.find_by_hash(params[:trigger_hash])
+  @trigger = Trigger.find_by_trigger_hash(params[:trigger_hash])
   @trigger.send_tweet(params[:body])
   201
 end
@@ -259,7 +257,7 @@ get '/auth/twitter/callback' do
 
       session[:user] = @user.twitter_name
 
-      @trigger = @user.triggers.find_by_hash(session[:trigger_hash]) if session[:trigger_hash]
+      @trigger = @user.triggers.find_by_trigger_hash(session[:trigger_hash]) if session[:trigger_hash]
       logger.debug("Trigger: #{@trigger}")
 
       erb :success

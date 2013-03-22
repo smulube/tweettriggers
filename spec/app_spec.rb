@@ -186,7 +186,7 @@ describe APP_TITLE do
         last_response.status.should == 200
         json = JSON.parse(last_response.body)
         json['trigger_hash'].should_not be_blank
-        json['trigger_hash'].should == @user.triggers.last.hash
+        json['trigger_hash'].should == @user.triggers.last.trigger_hash
       end
     end
 
@@ -209,7 +209,7 @@ describe APP_TITLE do
       end
 
       it "should render the edit form for the trigger" do
-        get "/triggers/#{@user.triggers.last.hash}/edit", nil, @rack_env
+        get "/triggers/#{@user.triggers.last.trigger_hash}/edit", nil, @rack_env
         last_response.status.should == 200
         last_response.body.should include('<form action="" method="post" id="tweetform">')
       end
@@ -225,19 +225,19 @@ describe APP_TITLE do
       end
 
       it "should render :auth" do
-        get "/triggers/#{@trigger.hash}/edit", nil, @rack_env
+        get "/triggers/#{@trigger.trigger_hash}/edit", nil, @rack_env
         last_response.status.should == 200
         last_response.body.should include('Authenticate with Twitter')
       end
 
       it "should keep the trigger_hash in the session" do
-        get "/triggers/#{@trigger.hash}/edit", nil, @rack_env
-        last_request.env['rack.session']['trigger_hash'].should == @trigger.hash
+        get "/triggers/#{@trigger.trigger_hash}/edit", nil, @rack_env
+        last_request.env['rack.session']['trigger_hash'].should == @trigger.trigger_hash
       end
 
       it "should load the trigger object when rendering login" do
-        Trigger.should_receive(:find_by_hash).with(@trigger.hash).and_return(@trigger)
-        get "/triggers/#{@trigger.hash}/edit", nil, @rack_env
+        Trigger.should_receive(:find_by_trigger_hash).with(@trigger.trigger_hash).and_return(@trigger)
+        get "/triggers/#{@trigger.trigger_hash}/edit", nil, @rack_env
       end
     end
 
@@ -264,21 +264,21 @@ describe APP_TITLE do
       end
 
       it "should update the trigger 'tweet' param" do
-        put "/triggers/#{@user.triggers.last.hash}", {'tweet' => 'something_new'}, @rack_env
+        put "/triggers/#{@user.triggers.last.trigger_hash}", {'tweet' => 'something_new'}, @rack_env
         @user.triggers.last.tweet.should == "something_new"
       end
 
       it "should strip spaces off the tweet param before saving it" do
-        put "/triggers/#{@user.triggers.last.hash}", {'tweet' => '   spacely sprockets       '}, @rack_env
+        put "/triggers/#{@user.triggers.last.trigger_hash}", {'tweet' => '   spacely sprockets       '}, @rack_env
         @user.triggers.last.tweet.should == "spacely sprockets"
       end
 
       it "should render the trigger_hash into body json" do
-        put "/triggers/#{@user.triggers.last.hash}", {'tweet' => 'something_new'}, @rack_env
+        put "/triggers/#{@user.triggers.last.trigger_hash}", {'tweet' => 'something_new'}, @rack_env
         last_response.status.should == 200
         json = JSON.parse(last_response.body)
         json["trigger_hash"].should_not be_blank
-        json["trigger_hash"].should == @user.triggers.last.hash
+        json["trigger_hash"].should == @user.triggers.last.trigger_hash
       end
     end
 
@@ -290,20 +290,20 @@ describe APP_TITLE do
       end
 
       it "should render :auth" do
-        put "/triggers/#{@user.triggers.last.hash}", { 'tweet' => 'something new' }, @rack_env
+        put "/triggers/#{@user.triggers.last.trigger_hash}", { 'tweet' => 'something new' }, @rack_env
         last_response.status.should == 200
         last_response.body.should include('Authenticate with Twitter')
       end
 
       it "should not update the trigger" do
-        put "/triggers/#{@user.triggers.last.hash}", {'tweet' => 'something_new'}, @rack_env
+        put "/triggers/#{@user.triggers.last.trigger_hash}", {'tweet' => 'something_new'}, @rack_env
         @user.triggers.last.tweet.should_not == "something_new"
       end
     end
 
     context "user not logged in" do
       it "should render :auth" do
-        put "/triggers/#{@user.triggers.last.hash}"
+        put "/triggers/#{@user.triggers.last.trigger_hash}"
         last_response.status.should == 200
         last_response.body.should include('Authenticate with Twitter')
       end
@@ -319,14 +319,14 @@ describe APP_TITLE do
 
     it "should destroy the trigger" do
       count = @user.triggers.count
-      delete "/triggers/#{@user.triggers.last.hash}", nil, @rack_env
+      delete "/triggers/#{@user.triggers.last.trigger_hash}", nil, @rack_env
       last_response.status.should == 200
       @user.triggers.count.should == count - 1
     end
 
     it "should render :auth if the trigger is not found" do
       count = @user.triggers.count
-      delete "/triggers/#{@user.triggers.last.hash}rubbish", nil, @rack_env
+      delete "/triggers/#{@user.triggers.last.trigger_hash}rubbish", nil, @rack_env
       last_response.status.should == 200
       last_response.body.should include("Authenticate with Twitter")
       @user.triggers.count.should == count
@@ -340,23 +340,23 @@ describe APP_TITLE do
     end
 
     it "should send a tweet with the input" do
-      Trigger.should_receive(:find_by_hash).with(@trigger.hash).and_return(@trigger)
+      Trigger.should_receive(:find_by_trigger_hash).with(@trigger.trigger_hash).and_return(@trigger)
       @trigger.should_receive(:send_tweet).with('something with urlencoding')
-      post "/triggers/#{@user.triggers.last.hash}/send", "body=something%20with%20urlencoding"
+      post "/triggers/#{@user.triggers.last.trigger_hash}/send", "body=something%20with%20urlencoding"
       last_response.status.should == 201
     end
 
     it "should handle trigger exceptions" do
-      Trigger.should_receive(:find_by_hash).with(@trigger.hash).and_return(@trigger)
+      Trigger.should_receive(:find_by_trigger_hash).with(@trigger.trigger_hash).and_return(@trigger)
       @trigger.should_receive(:send_tweet).and_raise(TriggerException.new("duplicate tweet"))
-      post "/triggers/#{@user.triggers.last.hash}/send", "body=something%20with%20urlencoding"
+      post "/triggers/#{@user.triggers.last.trigger_hash}/send", "body=something%20with%20urlencoding"
       last_response.status.should == 400
       last_response.body.should == "Unable to deliver trigger: duplicate tweet"
     end
 
     it "should handle other exceptions" do
-      Trigger.should_receive(:find_by_hash).and_raise(Exception.new("Bad stuff"))
-      post "/triggers/#{@user.triggers.last.hash}/send", "body=something"
+      Trigger.should_receive(:find_by_trigger_hash).and_raise(Exception.new("Bad stuff"))
+      post "/triggers/#{@user.triggers.last.trigger_hash}/send", "body=something"
       last_response.status.should == 500
       last_response.body.should == "Unexpected error occurred: Bad stuff"
     end

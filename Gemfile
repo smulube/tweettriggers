@@ -10,6 +10,7 @@ gem 'twitter'
 gem 'twitter_oauth'
 gem 'unicorn'
 gem 'redis'
+gem 'twitter-text'
 
 group :development, :test do
   gem 'rspec'
